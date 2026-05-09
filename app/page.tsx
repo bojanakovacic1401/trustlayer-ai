@@ -1,65 +1,179 @@
-import Image from "next/image";
+"use client";
+
+import { useMemo, useState } from "react";
+
+import { AgentWorkspace } from "@/components/AgentWorkspace";
+import { AttackTimeline, PolicyChecks, SafeAgentResponse } from "@/components/TrustPanels";
+import { DemoScript } from "@/components/DemoScript";
+import { Hero } from "@/components/Hero";
+import { RiskCard } from "@/components/RiskCard";
+import { ScenarioSelector } from "@/components/ScenarioSelector";
+import { SecurityLogs } from "@/components/SecurityLogs";
+import { StatsGrid } from "@/components/StatsGrid";
+import { TopNav } from "@/components/TopNav";
+
+import { defaultScenario, demoScenarios } from "@/lib/demoData";
+import { analyzeContent, createToolCall } from "@/lib/securityEngine";
+import type { SecurityEvent } from "@/lib/types";
 
 export default function Home() {
+  const [activeScenarioId, setActiveScenarioId] = useState(defaultScenario.id);
+  const [documentText, setDocumentText] = useState(defaultScenario.document);
+  const [prompt, setPrompt] = useState(defaultScenario.prompt);
+  const [hasRun, setHasRun] = useState(false);
+  const [events, setEvents] = useState<SecurityEvent[]>([]);
+
+  const activeScenario = useMemo(() => {
+    return (
+      demoScenarios.find((scenario) => scenario.id === activeScenarioId) ||
+      defaultScenario
+    );
+  }, [activeScenarioId]);
+
+  const analysis = useMemo(() => {
+    return analyzeContent(prompt, documentText);
+  }, [prompt, documentText]);
+
+  const toolCall = useMemo(() => {
+    return createToolCall(prompt, documentText, analysis);
+  }, [prompt, documentText, analysis]);
+
+  function createId() {
+    return `${Date.now()}-${Math.random()}`;
+  }
+
+  function getTime() {
+    return new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  }
+
+  function runSimulation() {
+    const time = getTime();
+    const newEvents: SecurityEvent[] = [];
+
+    analysis.policyChecks.forEach((check) => {
+      if (check.status === "Fail") {
+        newEvents.push({
+          id: createId(),
+          time,
+          type: check.name,
+          risk: analysis.level,
+          action: "Blocked",
+          source: check.details,
+        });
+      }
+
+      if (check.status === "Warn") {
+        newEvents.push({
+          id: createId(),
+          time,
+          type: check.name,
+          risk: analysis.level === "Low" ? "Medium" : analysis.level,
+          action: "Logged",
+          source: check.details,
+        });
+      }
+    });
+
+    newEvents.push({
+      id: createId(),
+      time,
+      type: `Tool Call: ${toolCall.tool}`,
+      risk: analysis.level,
+      action: analysis.decision,
+      source: toolCall.destination,
+    });
+
+    setEvents((prev) => [...newEvents, ...prev].slice(0, 12));
+    setHasRun(true);
+  }
+
+  function loadScenario(scenarioId: string) {
+    const scenario = demoScenarios.find((item) => item.id === scenarioId);
+
+    if (!scenario) return;
+
+    setActiveScenarioId(scenario.id);
+    setPrompt(scenario.prompt);
+    setDocumentText(scenario.document);
+    setHasRun(false);
+  }
+
+  const blockedCount = events.filter((event) => event.action === "Blocked").length;
+
+  const highRiskCount = events.filter((event) =>
+    ["High", "Critical"].includes(event.risk)
+  ).length;
+
+  const loggedCount = events.filter((event) => event.action === "Logged").length;
+
+  const safeResponse =
+    analysis.decision === "Blocked"
+      ? "I can summarize safe parts of the document, but I will not follow hidden instructions, expose restricted data, or execute risky tool actions."
+      : analysis.decision === "Needs Approval"
+        ? "This request may continue only after a human reviews the proposed action."
+        : "The document can be summarized safely under the current security policy.";
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <main className="relative min-h-screen overflow-hidden bg-[#030603] text-[#f5f5f0]">
+      <div className="radial-glow absolute inset-0" />
+      <div className="cyber-grid absolute inset-0 opacity-70" />
+      <div className="scan-line pointer-events-none absolute left-0 top-0 h-24 w-full opacity-30" />
+
+      <div className="absolute left-1/2 top-[-180px] h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-lime-400/20 blur-[120px]" />
+      <div className="absolute bottom-[-180px] right-[-120px] h-[420px] w-[420px] rounded-full bg-green-500/10 blur-[120px]" />
+
+      <div className="relative z-10 mx-auto max-w-7xl px-5 py-6">
+        <TopNav onRun={runSimulation} />
+
+        <Hero
+          analysis={analysis}
+          onRun={runSimulation}
+          onLoadSafe={() => loadScenario("clean-request")}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+
+        <ScenarioSelector
+          scenarios={demoScenarios}
+          activeScenarioId={activeScenarioId}
+          onSelectScenario={loadScenario}
+        />
+
+        <StatsGrid
+          totalEvents={events.length}
+          blockedCount={blockedCount}
+          highRiskCount={highRiskCount}
+          loggedCount={loggedCount}
+        />
+
+        <section className="grid gap-6 lg:grid-cols-[1.08fr_0.92fr]">
+          <AgentWorkspace
+            activeScenarioName={activeScenario.name}
+            prompt={prompt}
+            documentText={documentText}
+            onPromptChange={setPrompt}
+            onDocumentChange={setDocumentText}
+            onAnalyze={runSimulation}
+          />
+
+          <div className="space-y-6">
+            <RiskCard analysis={analysis} toolCall={toolCall} />
+
+            <SafeAgentResponse hasRun={hasRun} response={safeResponse} />
+          </div>
+        </section>
+
+        <section className="mt-6 grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+          <AttackTimeline analysis={analysis} />
+          <PolicyChecks analysis={analysis} />
+        </section>
+
+        <SecurityLogs events={events} />
+
+        <DemoScript />
+      </div>
+    </main>
   );
 }
