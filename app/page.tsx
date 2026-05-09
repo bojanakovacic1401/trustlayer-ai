@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { ActionApprovalPanel } from "@/components/ActionApprovalPanel";
 import { AgentWorkspace } from "@/components/AgentWorkspace";
 import { ApiStatusBar } from "@/components/ApiStatusBar";
 import {
@@ -20,7 +21,12 @@ import { TopNav } from "@/components/TopNav";
 
 import { defaultScenario, demoScenarios } from "@/lib/demoData";
 import { analyzeContent, createToolCall } from "@/lib/securityEngine";
-import type { SecurityAnalysis, SecurityEvent, ToolCall } from "@/lib/types";
+import type {
+  OperatorDecision,
+  SecurityAnalysis,
+  SecurityEvent,
+  ToolCall,
+} from "@/lib/types";
 
 type AnalyzeApiResponse =
   | {
@@ -67,6 +73,8 @@ export default function Home() {
   const [scanStep, setScanStep] = useState("Ready to analyze agent activity.");
   const [isDirty, setIsDirty] = useState(false);
   const [lastAnalyzedAt, setLastAnalyzedAt] = useState<string | null>(null);
+  const [operatorDecision, setOperatorDecision] =
+    useState<OperatorDecision | null>(null);
 
   const activeScenario =
     demoScenarios.find((scenario) => scenario.id === activeScenarioId) ||
@@ -108,7 +116,8 @@ export default function Home() {
           id: createId(),
           time,
           type: check.name,
-          risk: currentAnalysis.level === "Low" ? "Medium" : currentAnalysis.level,
+          risk:
+            currentAnalysis.level === "Low" ? "Medium" : currentAnalysis.level,
           action: "Logged",
           source: check.details,
         });
@@ -131,6 +140,7 @@ export default function Home() {
     try {
       setIsAnalyzing(true);
       setHasRun(false);
+      setOperatorDecision(null);
       setApiStatus("idle");
 
       setScanStep("Step 1/4 — Inspecting prompt and document...");
@@ -203,17 +213,35 @@ export default function Home() {
     setIsDirty(false);
     setApiStatus("idle");
     setLastAnalyzedAt(null);
+    setOperatorDecision(null);
     setScanStep("Scenario loaded. Ready to analyze through API.");
   }
 
   function updatePrompt(value: string) {
     setPrompt(value);
     setIsDirty(true);
+    setOperatorDecision(null);
   }
 
   function updateDocument(value: string) {
     setDocumentText(value);
     setIsDirty(true);
+    setOperatorDecision(null);
+  }
+
+  function handleOperatorDecision(decision: OperatorDecision) {
+    setOperatorDecision(decision);
+
+    const event: SecurityEvent = {
+      id: createId(),
+      time: getTime(),
+      type: `Operator Decision: ${decision}`,
+      risk: analysis.level,
+      action: decision,
+      source: `${toolCall.tool} → ${toolCall.destination}`,
+    };
+
+    setEvents((prev) => [event, ...prev].slice(0, 12));
   }
 
   const blockedCount = events.filter((event) => event.action === "Blocked").length;
@@ -225,11 +253,19 @@ export default function Home() {
   const loggedCount = events.filter((event) => event.action === "Logged").length;
 
   const safeResponse =
-    analysis.decision === "Blocked"
-      ? "I can summarize safe parts of the document, but I will not follow hidden instructions, expose restricted data, or execute risky tool actions."
-      : analysis.decision === "Needs Approval"
-        ? "This request may continue only after a human reviews the proposed action."
-        : "The document can be summarized safely under the current security policy.";
+    operatorDecision === "Approved"
+      ? "The operator approved the action. TrustLayer will allow execution and keep a full audit log."
+      : operatorDecision === "Blocked"
+        ? "The operator blocked the action. The AI agent will not execute the proposed tool call."
+        : operatorDecision === "Redacted"
+          ? "TrustLayer will redact sensitive content before allowing a safe continuation."
+          : operatorDecision === "Human Review"
+            ? "The action has been escalated to a human reviewer before execution."
+            : analysis.decision === "Blocked"
+              ? "I can summarize safe parts of the document, but I will not follow hidden instructions, expose restricted data, or execute risky tool actions."
+              : analysis.decision === "Needs Approval"
+                ? "This request may continue only after a human reviews the proposed action."
+                : "The document can be summarized safely under the current security policy.";
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#030603] text-[#f5f5f0]">
@@ -284,6 +320,13 @@ export default function Home() {
 
           <div className="space-y-6">
             <RiskCard analysis={analysis} toolCall={toolCall} />
+
+            <ActionApprovalPanel
+              analysis={analysis}
+              toolCall={toolCall}
+              operatorDecision={operatorDecision}
+              onDecision={handleOperatorDecision}
+            />
 
             <SafeAgentResponse hasRun={hasRun} response={safeResponse} />
 

@@ -47,11 +47,22 @@ export type ToolCall = {
   requestedBy: "User" | "Document" | "Agent";
 };
 
+export type OperatorDecision =
+  | "Approved"
+  | "Blocked"
+  | "Redacted"
+  | "Human Review";
+
 export type SecurityEvent = {
   id: string;
   time: string;
   type: string;
   risk: RiskLevel;
-  action: Decision | "Redacted" | "Logged";
+  action:
+    | Decision
+    | OperatorDecision
+    | "Redacted"
+    | "Logged"
+    | "Manual Override";
   source: string;
 };
