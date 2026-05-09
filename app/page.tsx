@@ -1,10 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { AgentWorkspace } from "@/components/AgentWorkspace";
-import { AttackTimeline, PolicyChecks, SafeAgentResponse } from "@/components/TrustPanels";
+import { ApiStatusBar } from "@/components/ApiStatusBar";
+import {
+  AttackTimeline,
+  PolicyChecks,
+  SafeAgentResponse,
+} from "@/components/TrustPanels";
 import { DemoScript } from "@/components/DemoScript";
+import { ExportReportButton } from "@/components/ExportReportButton";
 import { Hero } from "@/components/Hero";
 import { RiskCard } from "@/components/RiskCard";
 import { ScenarioSelector } from "@/components/ScenarioSelector";
@@ -14,29 +20,57 @@ import { TopNav } from "@/components/TopNav";
 
 import { defaultScenario, demoScenarios } from "@/lib/demoData";
 import { analyzeContent, createToolCall } from "@/lib/securityEngine";
-import type { SecurityEvent } from "@/lib/types";
+import type { SecurityAnalysis, SecurityEvent, ToolCall } from "@/lib/types";
+
+type AnalyzeApiResponse =
+  | {
+      ok: true;
+      requestId: string;
+      scenarioId: string;
+      analysis: SecurityAnalysis;
+      toolCall: ToolCall;
+      timestamp: string;
+      durationMs: number;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+const initialAnalysis = analyzeContent(
+  defaultScenario.prompt,
+  defaultScenario.document
+);
+
+const initialToolCall = createToolCall(
+  defaultScenario.prompt,
+  defaultScenario.document,
+  initialAnalysis
+);
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export default function Home() {
   const [activeScenarioId, setActiveScenarioId] = useState(defaultScenario.id);
   const [documentText, setDocumentText] = useState(defaultScenario.document);
   const [prompt, setPrompt] = useState(defaultScenario.prompt);
+  const [analysis, setAnalysis] = useState<SecurityAnalysis>(initialAnalysis);
+  const [toolCall, setToolCall] = useState<ToolCall>(initialToolCall);
   const [hasRun, setHasRun] = useState(false);
   const [events, setEvents] = useState<SecurityEvent[]>([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [apiStatus, setApiStatus] = useState<"idle" | "connected" | "error">(
+    "idle"
+  );
+  const [scanStep, setScanStep] = useState("Ready to analyze agent activity.");
+  const [isDirty, setIsDirty] = useState(false);
+  const [lastAnalyzedAt, setLastAnalyzedAt] = useState<string | null>(null);
 
-  const activeScenario = useMemo(() => {
-    return (
-      demoScenarios.find((scenario) => scenario.id === activeScenarioId) ||
-      defaultScenario
-    );
-  }, [activeScenarioId]);
-
-  const analysis = useMemo(() => {
-    return analyzeContent(prompt, documentText);
-  }, [prompt, documentText]);
-
-  const toolCall = useMemo(() => {
-    return createToolCall(prompt, documentText, analysis);
-  }, [prompt, documentText, analysis]);
+  const activeScenario =
+    demoScenarios.find((scenario) => scenario.id === activeScenarioId) ||
+    defaultScenario;
 
   function createId() {
     return `${Date.now()}-${Math.random()}`;
@@ -50,17 +84,20 @@ export default function Home() {
     });
   }
 
-  function runSimulation() {
+  function buildEvents(
+    currentAnalysis: SecurityAnalysis,
+    currentToolCall: ToolCall
+  ) {
     const time = getTime();
     const newEvents: SecurityEvent[] = [];
 
-    analysis.policyChecks.forEach((check) => {
+    currentAnalysis.policyChecks.forEach((check) => {
       if (check.status === "Fail") {
         newEvents.push({
           id: createId(),
           time,
           type: check.name,
-          risk: analysis.level,
+          risk: currentAnalysis.level,
           action: "Blocked",
           source: check.details,
         });
@@ -71,7 +108,7 @@ export default function Home() {
           id: createId(),
           time,
           type: check.name,
-          risk: analysis.level === "Low" ? "Medium" : analysis.level,
+          risk: currentAnalysis.level === "Low" ? "Medium" : currentAnalysis.level,
           action: "Logged",
           source: check.details,
         });
@@ -81,14 +118,68 @@ export default function Home() {
     newEvents.push({
       id: createId(),
       time,
-      type: `Tool Call: ${toolCall.tool}`,
-      risk: analysis.level,
-      action: analysis.decision,
-      source: toolCall.destination,
+      type: `Tool Call: ${currentToolCall.tool}`,
+      risk: currentAnalysis.level,
+      action: currentAnalysis.decision,
+      source: currentToolCall.destination,
     });
 
-    setEvents((prev) => [...newEvents, ...prev].slice(0, 12));
-    setHasRun(true);
+    return newEvents;
+  }
+
+  async function runSimulation() {
+    try {
+      setIsAnalyzing(true);
+      setHasRun(false);
+      setApiStatus("idle");
+
+      setScanStep("Step 1/4 — Inspecting prompt and document...");
+      await wait(350);
+
+      setScanStep("Step 2/4 — Checking prompt injection patterns...");
+      await wait(350);
+
+      setScanStep("Step 3/4 — Evaluating sensitive data and destinations...");
+      await wait(350);
+
+      setScanStep("Step 4/4 — Calling /api/analyze security endpoint...");
+
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt,
+          document: documentText,
+          scenarioId: activeScenarioId,
+        }),
+      });
+
+      const data = (await response.json()) as AnalyzeApiResponse;
+
+      if (!response.ok || !data.ok) {
+        throw new Error("error" in data ? data.error : "API analysis failed.");
+      }
+
+      setAnalysis(data.analysis);
+      setToolCall(data.toolCall);
+      setLastAnalyzedAt(data.timestamp);
+      setApiStatus("connected");
+      setScanStep(
+        `Scan complete — ${data.analysis.decision} in ${data.durationMs}ms.`
+      );
+      setIsDirty(false);
+      setHasRun(true);
+
+      const newEvents = buildEvents(data.analysis, data.toolCall);
+      setEvents((prev) => [...newEvents, ...prev].slice(0, 12));
+    } catch {
+      setApiStatus("error");
+      setScanStep("API error — analysis could not be completed.");
+    } finally {
+      setIsAnalyzing(false);
+    }
   }
 
   function loadScenario(scenarioId: string) {
@@ -96,10 +187,33 @@ export default function Home() {
 
     if (!scenario) return;
 
+    const nextAnalysis = analyzeContent(scenario.prompt, scenario.document);
+    const nextToolCall = createToolCall(
+      scenario.prompt,
+      scenario.document,
+      nextAnalysis
+    );
+
     setActiveScenarioId(scenario.id);
     setPrompt(scenario.prompt);
     setDocumentText(scenario.document);
+    setAnalysis(nextAnalysis);
+    setToolCall(nextToolCall);
     setHasRun(false);
+    setIsDirty(false);
+    setApiStatus("idle");
+    setLastAnalyzedAt(null);
+    setScanStep("Scenario loaded. Ready to analyze through API.");
+  }
+
+  function updatePrompt(value: string) {
+    setPrompt(value);
+    setIsDirty(true);
+  }
+
+  function updateDocument(value: string) {
+    setDocumentText(value);
+    setIsDirty(true);
   }
 
   const blockedCount = events.filter((event) => event.action === "Blocked").length;
@@ -127,18 +241,27 @@ export default function Home() {
       <div className="absolute bottom-[-180px] right-[-120px] h-[420px] w-[420px] rounded-full bg-green-500/10 blur-[120px]" />
 
       <div className="relative z-10 mx-auto max-w-7xl px-5 py-6">
-        <TopNav onRun={runSimulation} />
+        <TopNav onRun={runSimulation} isAnalyzing={isAnalyzing} />
 
         <Hero
           analysis={analysis}
           onRun={runSimulation}
           onLoadSafe={() => loadScenario("clean-request")}
+          isAnalyzing={isAnalyzing}
         />
 
         <ScenarioSelector
           scenarios={demoScenarios}
           activeScenarioId={activeScenarioId}
           onSelectScenario={loadScenario}
+        />
+
+        <ApiStatusBar
+          isAnalyzing={isAnalyzing}
+          apiStatus={apiStatus}
+          scanStep={scanStep}
+          isDirty={isDirty}
+          lastAnalyzedAt={lastAnalyzedAt}
         />
 
         <StatsGrid
@@ -153,8 +276,9 @@ export default function Home() {
             activeScenarioName={activeScenario.name}
             prompt={prompt}
             documentText={documentText}
-            onPromptChange={setPrompt}
-            onDocumentChange={setDocumentText}
+            isAnalyzing={isAnalyzing}
+            onPromptChange={updatePrompt}
+            onDocumentChange={updateDocument}
             onAnalyze={runSimulation}
           />
 
@@ -162,6 +286,29 @@ export default function Home() {
             <RiskCard analysis={analysis} toolCall={toolCall} />
 
             <SafeAgentResponse hasRun={hasRun} response={safeResponse} />
+
+            <div className="rounded-[2rem] border border-lime-300/15 bg-black/45 p-5 backdrop-blur-xl">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">
+                    Security Report
+                  </h3>
+                  <p className="mt-1 text-sm text-white/45">
+                    Export current scan results for audit or demo review.
+                  </p>
+                </div>
+
+                <ExportReportButton
+                  scenarioName={activeScenario.name}
+                  prompt={prompt}
+                  documentText={documentText}
+                  analysis={analysis}
+                  toolCall={toolCall}
+                  events={events}
+                  lastAnalyzedAt={lastAnalyzedAt}
+                />
+              </div>
+            </div>
           </div>
         </section>
 

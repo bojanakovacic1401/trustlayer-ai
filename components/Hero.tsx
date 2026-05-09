@@ -5,9 +5,10 @@ type HeroProps = {
   analysis: SecurityAnalysis;
   onRun: () => void;
   onLoadSafe: () => void;
+  isAnalyzing: boolean;
 };
 
-export function Hero({ analysis, onRun, onLoadSafe }: HeroProps) {
+export function Hero({ analysis, onRun, onLoadSafe, isAnalyzing }: HeroProps) {
   return (
     <section className="relative mb-14 text-center">
       <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-lime-300/25 bg-white/[0.04] px-4 py-2 text-xs text-lime-200 backdrop-blur">
@@ -28,15 +29,17 @@ export function Hero({ analysis, onRun, onLoadSafe }: HeroProps) {
       <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
         <button
           onClick={onRun}
-          className="group rounded-full bg-white px-6 py-3 text-sm font-bold text-black transition hover:bg-lime-300"
+          disabled={isAnalyzing}
+          className="group rounded-full bg-white px-6 py-3 text-sm font-bold text-black transition hover:bg-lime-300 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          Run attack simulation
+          {isAnalyzing ? "Running security scan..." : "Run attack simulation"}
           <ArrowRight className="ml-2 inline h-4 w-4 transition group-hover:translate-x-1" />
         </button>
 
         <button
           onClick={onLoadSafe}
-          className="rounded-full border border-white/15 bg-white/[0.03] px-6 py-3 text-sm font-bold text-white backdrop-blur transition hover:border-lime-300/40 hover:text-lime-200"
+          disabled={isAnalyzing}
+          className="rounded-full border border-white/15 bg-white/[0.03] px-6 py-3 text-sm font-bold text-white backdrop-blur transition hover:border-lime-300/40 hover:text-lime-200 disabled:cursor-not-allowed disabled:opacity-60"
         >
           Load safe workflow
         </button>
