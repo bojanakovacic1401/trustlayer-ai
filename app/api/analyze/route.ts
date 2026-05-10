@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { defaultPolicyConfig } from "@/lib/policies";
 import { analyzeContent, createToolCall } from "@/lib/securityEngine";
+import type { SecurityPolicyConfig } from "@/lib/types";
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
@@ -11,6 +13,11 @@ export async function POST(request: Request) {
     const document = String(body.document || "");
     const scenarioId = String(body.scenarioId || "custom");
 
+    const policyConfig: SecurityPolicyConfig = {
+      ...defaultPolicyConfig,
+      ...(body.policyConfig || {}),
+    };
+
     if (!prompt.trim() && !document.trim()) {
       return NextResponse.json(
         {
@@ -21,7 +28,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const analysis = analyzeContent(prompt, document);
+    const analysis = analyzeContent(prompt, document, policyConfig);
     const toolCall = createToolCall(prompt, document, analysis);
 
     return NextResponse.json({
@@ -30,6 +37,7 @@ export async function POST(request: Request) {
       scenarioId,
       analysis,
       toolCall,
+      policyConfig,
       timestamp: new Date().toISOString(),
       durationMs: Date.now() - startedAt,
     });

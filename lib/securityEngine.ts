@@ -1,7 +1,9 @@
+import { defaultPolicyConfig } from "./policies";
 import type {
   Decision,
   PolicyCheck,
   SecurityAnalysis,
+  SecurityPolicyConfig,
   ThreatType,
   TimelineStep,
   ToolCall,
@@ -70,47 +72,112 @@ function hasToolAction(prompt: string, document: string): boolean {
   );
 }
 
-function getDecision(score: number): Decision {
-  if (score >= 55) return "Blocked";
-  if (score >= 30) return "Needs Approval";
+function getRiskLevel(score: number): SecurityAnalysis["level"] {
+  if (score >= 80) return "Critical";
+  if (score >= 55) return "High";
+  if (score >= 30) return "Medium";
+  return "Low";
+}
+
+function getPolicyAwareDecision({
+  score,
+  hasPromptInjection,
+  hasSuspiciousExternalRecipient,
+  hasCredentialExposure,
+  hasDangerousSystemAction,
+  hasRequestedToolAction,
+  policyConfig,
+}: {
+  score: number;
+  hasPromptInjection: boolean;
+  hasSuspiciousExternalRecipient: boolean;
+  hasCredentialExposure: boolean;
+  hasDangerousSystemAction: boolean;
+  hasRequestedToolAction: boolean;
+  policyConfig: SecurityPolicyConfig;
+}): Decision {
+  if (policyConfig.blockPromptInjection && hasPromptInjection) {
+    return "Blocked";
+  }
+
+  if (policyConfig.blockExternalRecipients && hasSuspiciousExternalRecipient) {
+    return "Blocked";
+  }
+
+  if (policyConfig.blockDestructiveActions && hasDangerousSystemAction) {
+    return "Blocked";
+  }
+
+  if (policyConfig.redactCredentials && hasCredentialExposure) {
+    return "Needs Approval";
+  }
+
+  if (policyConfig.requireApprovalForToolCalls && hasRequestedToolAction) {
+    return "Needs Approval";
+  }
+
+  if (score >= 80) {
+    return "Needs Approval";
+  }
+
+  if (score >= 30) {
+    return "Needs Approval";
+  }
+
   return "Allowed";
 }
 
 function buildExplanation(
   decision: Decision,
   threats: ThreatType[],
-  suspiciousEmails: string[]
+  suspiciousEmails: string[],
+  policyConfig: SecurityPolicyConfig
 ): string {
   if (decision === "Blocked") {
-    if (threats.includes("Prompt Injection")) {
-      return "TrustLayer detected a hidden instruction attempting to override the AI agent and trigger unsafe behavior.";
+    if (threats.includes("Prompt Injection") && policyConfig.blockPromptInjection) {
+      return "TrustLayer blocked the action because policy forbids hidden instructions from controlling the AI agent.";
     }
 
-    if (threats.includes("Credential Exposure")) {
-      return "TrustLayer detected credential-like secrets or restricted data that should not be exposed in an AI response.";
+    if (
+      threats.includes("Suspicious External Recipient") &&
+      policyConfig.blockExternalRecipients
+    ) {
+      return "TrustLayer blocked the action because policy forbids sending sensitive content to suspicious external recipients.";
     }
 
-    if (suspiciousEmails.length) {
-      return "TrustLayer detected an external recipient that appears inside the document rather than in the user's explicit request.";
+    if (threats.includes("Excessive Agency") && policyConfig.blockDestructiveActions) {
+      return "TrustLayer blocked the action because policy forbids destructive database or system actions.";
     }
 
     return "TrustLayer blocked the request because the agent attempted a high-risk action.";
   }
 
   if (decision === "Needs Approval") {
-    return "TrustLayer found moderate risk. The agent can continue only after human approval.";
+    if (threats.includes("Credential Exposure") && policyConfig.redactCredentials) {
+      return "TrustLayer requires review because credentials or secrets should be redacted before any agent response.";
+    }
+
+    if (threats.includes("Tool Action Requested")) {
+      return "TrustLayer requires human approval before this AI agent can execute the proposed tool action.";
+    }
+
+    if (suspiciousEmails.length) {
+      return "TrustLayer detected an external destination and recommends manual review before execution.";
+    }
+
+    return "TrustLayer found moderate risk and requires a human decision.";
   }
 
-  return "TrustLayer did not detect dangerous instructions, sensitive data leakage, or risky tool actions.";
+  return "TrustLayer did not detect dangerous instructions, sensitive data leakage, or risky tool actions under the active policy.";
 }
 
 function buildRecommendation(decision: Decision): string {
   if (decision === "Blocked") {
-    return "Block the tool call, redact sensitive content, and allow only a safe summary.";
+    return "Block the tool call, preserve an audit log, and allow only a safe summary.";
   }
 
   if (decision === "Needs Approval") {
-    return "Require human approval before the AI agent performs the proposed action.";
+    return "Require human approval or redact sensitive content before the AI agent continues.";
   }
 
   return "Allow the request and log the action for audit visibility.";
@@ -154,17 +221,33 @@ function buildTimeline(
       status: suspiciousEmails.length ? "blocked" : "safe",
     },
     {
-      title: decision === "Blocked" ? "Action blocked" : "Action allowed",
+      title:
+        decision === "Blocked"
+          ? "Action blocked"
+          : decision === "Needs Approval"
+            ? "Action requires approval"
+            : "Action allowed",
       description:
         decision === "Blocked"
           ? "The proposed agent action was stopped before execution."
-          : "The agent can continue under current policy.",
-      status: decision === "Blocked" ? "blocked" : "safe",
+          : decision === "Needs Approval"
+            ? "The proposed action must be reviewed before execution."
+            : "The agent can continue under current policy.",
+      status:
+        decision === "Blocked"
+          ? "blocked"
+          : decision === "Needs Approval"
+            ? "warning"
+            : "safe",
     },
   ];
 }
 
-export function analyzeContent(prompt: string, document: string): SecurityAnalysis {
+export function analyzeContent(
+  prompt: string,
+  document: string,
+  policyConfig: SecurityPolicyConfig = defaultPolicyConfig
+): SecurityAnalysis {
   const combined = `${prompt}\n\n${document}`.toLowerCase();
 
   const matchedInjection = injectionPatterns.filter((pattern) =>
@@ -203,16 +286,7 @@ export function analyzeContent(prompt: string, document: string): SecurityAnalys
   if (document.toLowerCase().includes("internal only")) score += 10;
 
   const normalizedScore = Math.min(score, 100);
-
-  let level: SecurityAnalysis["level"] = "Low";
-
-  if (normalizedScore >= 80) {
-    level = "Critical";
-  } else if (normalizedScore >= 55) {
-    level = "High";
-  } else if (normalizedScore >= 30) {
-    level = "Medium";
-  }
+  const level = getRiskLevel(normalizedScore);
 
   const threats: ThreatType[] = [];
 
@@ -223,38 +297,81 @@ export function analyzeContent(prompt: string, document: string): SecurityAnalys
   if (toolActionRequested) threats.push("Tool Action Requested");
   if (dangerousSystemAction) threats.push("Excessive Agency");
 
-  const decision = getDecision(normalizedScore);
+  const uniqueThreats = unique(threats);
+
+  const decision = getPolicyAwareDecision({
+    score: normalizedScore,
+    hasPromptInjection: matchedInjection.length > 0,
+    hasSuspiciousExternalRecipient: suspiciousEmails.length > 0,
+    hasCredentialExposure: credentialExposure,
+    hasDangerousSystemAction: dangerousSystemAction,
+    hasRequestedToolAction: toolActionRequested,
+    policyConfig,
+  });
 
   const policyChecks: PolicyCheck[] = [
     {
       name: "Instruction integrity",
-      status: matchedInjection.length ? "Fail" : "Pass",
+      status: matchedInjection.length
+        ? policyConfig.blockPromptInjection
+          ? "Fail"
+          : "Warn"
+        : "Pass",
       details: matchedInjection.length
-        ? "Document contains instructions that try to override the agent."
+        ? policyConfig.blockPromptInjection
+          ? "Prompt injection was detected and blocked by policy."
+          : "Prompt injection was detected, but this policy is currently in monitor-only mode."
         : "No override instruction was detected.",
     },
     {
       name: "Data leakage prevention",
-      status: credentialExposure || sensitiveMatches.length > 2 ? "Fail" : sensitiveMatches.length ? "Warn" : "Pass",
+      status: credentialExposure
+        ? policyConfig.redactCredentials
+          ? "Warn"
+          : "Fail"
+        : sensitiveMatches.length > 1
+          ? "Warn"
+          : "Pass",
       details: sensitiveMatches.length
         ? `Sensitive categories: ${unique(sensitiveMatches).join(", ")}.`
         : "No sensitive data category detected.",
     },
     {
       name: "External destination control",
-      status: suspiciousEmails.length ? "Fail" : "Pass",
+      status: suspiciousEmails.length
+        ? policyConfig.blockExternalRecipients
+          ? "Fail"
+          : "Warn"
+        : "Pass",
       details: suspiciousEmails.length
-        ? `Suspicious destination: ${suspiciousEmails.join(", ")}.`
+        ? policyConfig.blockExternalRecipients
+          ? `Suspicious destination blocked: ${suspiciousEmails.join(", ")}.`
+          : `Suspicious destination detected but not blocked: ${suspiciousEmails.join(", ")}.`
         : "No suspicious recipient detected.",
     },
     {
       name: "Tool permission guard",
-      status: dangerousSystemAction ? "Fail" : toolActionRequested ? "Warn" : "Pass",
+      status: dangerousSystemAction
+        ? policyConfig.blockDestructiveActions
+          ? "Fail"
+          : "Warn"
+        : toolActionRequested && policyConfig.requireApprovalForToolCalls
+          ? "Warn"
+          : "Pass",
       details: dangerousSystemAction
-        ? "Agent attempted a high-impact system or database action."
-        : toolActionRequested
-          ? "Agent requested a tool action that should be reviewed."
-          : "No risky tool action requested.",
+        ? policyConfig.blockDestructiveActions
+          ? "Destructive database or system action was blocked by policy."
+          : "Destructive action detected, but blocking policy is disabled."
+        : toolActionRequested && policyConfig.requireApprovalForToolCalls
+          ? "Tool action requires approval under current policy."
+          : "No risky tool action requires review.",
+    },
+    {
+      name: "Audit logging",
+      status: policyConfig.auditAllActions ? "Pass" : "Warn",
+      details: policyConfig.auditAllActions
+        ? "All agent actions are logged for audit visibility."
+        : "Audit logging is not required by current policy.",
     },
   ];
 
@@ -262,11 +379,16 @@ export function analyzeContent(prompt: string, document: string): SecurityAnalys
     score: normalizedScore,
     level,
     decision,
-    threats: unique(threats),
+    threats: uniqueThreats,
     matchedInjection,
     sensitiveMatches: unique(sensitiveMatches),
     suspiciousEmails,
-    explanation: buildExplanation(decision, unique(threats), suspiciousEmails),
+    explanation: buildExplanation(
+      decision,
+      uniqueThreats,
+      suspiciousEmails,
+      policyConfig
+    ),
     recommendedAction: buildRecommendation(decision),
     policyChecks,
     timeline: buildTimeline(

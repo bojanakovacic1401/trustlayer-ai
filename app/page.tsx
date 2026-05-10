@@ -13,6 +13,7 @@ import {
 import { DemoScript } from "@/components/DemoScript";
 import { ExportReportButton } from "@/components/ExportReportButton";
 import { Hero } from "@/components/Hero";
+import { PolicyBuilder } from "@/components/PolicyBuilder";
 import { RiskCard } from "@/components/RiskCard";
 import { ScenarioSelector } from "@/components/ScenarioSelector";
 import { SecurityLogs } from "@/components/SecurityLogs";
@@ -20,11 +21,13 @@ import { StatsGrid } from "@/components/StatsGrid";
 import { TopNav } from "@/components/TopNav";
 
 import { defaultScenario, demoScenarios } from "@/lib/demoData";
+import { defaultPolicyConfig } from "@/lib/policies";
 import { analyzeContent, createToolCall } from "@/lib/securityEngine";
 import type {
   OperatorDecision,
   SecurityAnalysis,
   SecurityEvent,
+  SecurityPolicyConfig,
   ToolCall,
 } from "@/lib/types";
 
@@ -35,6 +38,7 @@ type AnalyzeApiResponse =
       scenarioId: string;
       analysis: SecurityAnalysis;
       toolCall: ToolCall;
+      policyConfig: SecurityPolicyConfig;
       timestamp: string;
       durationMs: number;
     }
@@ -45,7 +49,8 @@ type AnalyzeApiResponse =
 
 const initialAnalysis = analyzeContent(
   defaultScenario.prompt,
-  defaultScenario.document
+  defaultScenario.document,
+  defaultPolicyConfig
 );
 
 const initialToolCall = createToolCall(
@@ -62,6 +67,8 @@ export default function Home() {
   const [activeScenarioId, setActiveScenarioId] = useState(defaultScenario.id);
   const [documentText, setDocumentText] = useState(defaultScenario.document);
   const [prompt, setPrompt] = useState(defaultScenario.prompt);
+  const [policyConfig, setPolicyConfig] =
+    useState<SecurityPolicyConfig>(defaultPolicyConfig);
   const [analysis, setAnalysis] = useState<SecurityAnalysis>(initialAnalysis);
   const [toolCall, setToolCall] = useState<ToolCall>(initialToolCall);
   const [hasRun, setHasRun] = useState(false);
@@ -149,7 +156,7 @@ export default function Home() {
       setScanStep("Step 2/4 — Checking prompt injection patterns...");
       await wait(350);
 
-      setScanStep("Step 3/4 — Evaluating sensitive data and destinations...");
+      setScanStep("Step 3/4 — Applying active security policies...");
       await wait(350);
 
       setScanStep("Step 4/4 — Calling /api/analyze security endpoint...");
@@ -163,6 +170,7 @@ export default function Home() {
           prompt,
           document: documentText,
           scenarioId: activeScenarioId,
+          policyConfig,
         }),
       });
 
@@ -197,7 +205,11 @@ export default function Home() {
 
     if (!scenario) return;
 
-    const nextAnalysis = analyzeContent(scenario.prompt, scenario.document);
+    const nextAnalysis = analyzeContent(
+      scenario.prompt,
+      scenario.document,
+      policyConfig
+    );
     const nextToolCall = createToolCall(
       scenario.prompt,
       scenario.document,
@@ -218,15 +230,41 @@ export default function Home() {
   }
 
   function updatePrompt(value: string) {
+    const nextAnalysis = analyzeContent(value, documentText, policyConfig);
+    const nextToolCall = createToolCall(value, documentText, nextAnalysis);
+
     setPrompt(value);
+    setAnalysis(nextAnalysis);
+    setToolCall(nextToolCall);
     setIsDirty(true);
     setOperatorDecision(null);
   }
 
   function updateDocument(value: string) {
+    const nextAnalysis = analyzeContent(prompt, value, policyConfig);
+    const nextToolCall = createToolCall(prompt, value, nextAnalysis);
+
     setDocumentText(value);
+    setAnalysis(nextAnalysis);
+    setToolCall(nextToolCall);
     setIsDirty(true);
     setOperatorDecision(null);
+  }
+
+  function updatePolicyConfig(nextPolicyConfig: SecurityPolicyConfig) {
+    const nextAnalysis = analyzeContent(prompt, documentText, nextPolicyConfig);
+    const nextToolCall = createToolCall(prompt, documentText, nextAnalysis);
+
+    setPolicyConfig(nextPolicyConfig);
+    setAnalysis(nextAnalysis);
+    setToolCall(nextToolCall);
+    setIsDirty(true);
+    setOperatorDecision(null);
+    setScanStep("Policy changed. Analyze again to confirm through API.");
+  }
+
+  function resetPolicyConfig() {
+    updatePolicyConfig(defaultPolicyConfig);
   }
 
   function handleOperatorDecision(decision: OperatorDecision) {
@@ -298,6 +336,12 @@ export default function Home() {
           scanStep={scanStep}
           isDirty={isDirty}
           lastAnalyzedAt={lastAnalyzedAt}
+        />
+
+        <PolicyBuilder
+          policyConfig={policyConfig}
+          onChange={updatePolicyConfig}
+          onReset={resetPolicyConfig}
         />
 
         <StatsGrid

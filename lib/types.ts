@@ -24,6 +24,15 @@ export type PolicyCheck = {
   details: string;
 };
 
+export type SecurityPolicyConfig = {
+  blockPromptInjection: boolean;
+  blockExternalRecipients: boolean;
+  redactCredentials: boolean;
+  requireApprovalForToolCalls: boolean;
+  blockDestructiveActions: boolean;
+  auditAllActions: boolean;
+};
+
 export type SecurityAnalysis = {
   score: number;
   level: RiskLevel;
