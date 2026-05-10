@@ -46,7 +46,7 @@ This creates serious risks:
 
 ## Solution
 
-TrustLayer AI acts as a middleware security layer between the AI agent and the actions it wants to perform.
+TrustLayer AI acts as a middleware security layer between an AI agent and the actions it wants to perform.
 
 Before execution, TrustLayer analyzes:
 
@@ -54,7 +54,7 @@ Before execution, TrustLayer analyzes:
 - uploaded document content
 - hidden instructions
 - sensitive data
-- external destinations
+- suspicious external destinations
 - proposed tool calls
 - active security policies
 
@@ -113,8 +113,6 @@ Simulates and evaluates proposed AI agent actions such as:
 
 Allows teams to configure how TrustLayer reacts before an AI agent acts.
 
-![Policy Builder](./public/screenshots/policy-builder.png)
-
 Current policy controls include:
 
 - block prompt injection
@@ -124,34 +122,54 @@ Current policy controls include:
 - block destructive actions
 - audit all actions
 
-### Security Analysis
+---
 
-TrustLayer calculates a risk score, explains the decision, shows detected threats, and previews the proposed tool call.
+## Security Analysis
+
+TrustLayer calculates a risk score, explains the decision, shows detected threats, and previews the proposed tool call before execution.
 
 ![Security Analysis](./public/screenshots/security-analysis.png)
 
-### Human-in-the-Loop Approval
+---
+
+## Human-in-the-Loop Approval
 
 A human operator can decide what happens before the AI agent executes the action.
 
-![Approval Workflow](./public/screenshots/approval-workflow.png)
-
 Available decisions:
 
-- Approve
-- Block
-- Redact
-- Require Human Review
+- **Approve**
+- **Block**
+- **Redact**
+- **Require Human Review**
 
-### Enforcement and Reporting
+![Approval Workflow](./public/screenshots/approval-workflow.png)
 
-TrustLayer shows the safe response, enforcement status, audit state, and allows exporting a security report.
+---
 
-![Enforcement Center](./public/screenshots/enforcement-center.png)
+## Architecture
 
-### Security Logs and Architecture
+```txt
+User Prompt
+   ↓
+Uploaded Document
+   ↓
+TrustLayer Security Engine
+   ↓
+Risk Scoring
+   ↓
+Policy Builder
+   ↓
+Tool Call Guard
+   ↓
+Operator Approval
+   ↓
+Safe Agent Response
+   ↓
+Security Logs / Report Export
+```
 
-Every important action is logged for audit visibility. The system also shows the high-level security flow.
+TrustLayer does not rely on an LLM to make the core security decision. The main protection layer is deterministic and explainable: pattern detection, policy enforcement, tool-call inspection, suspicious destination checks, and audit rules.
 
 ![System Architecture](./public/screenshots/architecture.png)
 
@@ -184,32 +202,6 @@ The document attempts to reveal hidden system instructions and internal policies
 ### 6. Clean Request
 
 A safe business workflow with no dangerous content.
-
----
-
-## How It Works
-
-```txt
-User Prompt
-   ↓
-Uploaded Document
-   ↓
-TrustLayer Security Engine
-   ↓
-Risk Scoring
-   ↓
-Policy Builder
-   ↓
-Tool Call Guard
-   ↓
-Operator Approval
-   ↓
-Safe Agent Response
-   ↓
-Security Logs / Report Export
-```
-
-TrustLayer does not rely on an LLM to make the core security decision. The main protection layer is deterministic and explainable: pattern detection, policy enforcement, tool-call inspection, suspicious destination checks, and audit rules.
 
 ---
 
@@ -264,10 +256,8 @@ trustlayer-ai/
   public/
     screenshots/
       hero.png
-      policy-builder.png
       security-analysis.png
       approval-workflow.png
-      enforcement-center.png
       architecture.png
 ```
 
