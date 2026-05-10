@@ -5,6 +5,8 @@ import { useState } from "react";
 import { ActionApprovalPanel } from "@/components/ActionApprovalPanel";
 import { AgentWorkspace } from "@/components/AgentWorkspace";
 import { ApiStatusBar } from "@/components/ApiStatusBar";
+import { ExecutiveSummary } from "@/components/ExecutiveSummary";
+import { SystemArchitecture } from "@/components/SystemArchitecture";
 import {
   AttackTimeline,
   PolicyChecks,
@@ -289,6 +291,7 @@ export default function Home() {
   ).length;
 
   const loggedCount = events.filter((event) => event.action === "Logged").length;
+const enabledPolicyCount = Object.values(policyConfig).filter(Boolean).length;
 
   const safeResponse =
     operatorDecision === "Approved"
@@ -343,6 +346,15 @@ export default function Home() {
           onChange={updatePolicyConfig}
           onReset={resetPolicyConfig}
         />
+
+      <ExecutiveSummary
+        activeScenarioName={activeScenario.name}
+        riskLevel={analysis.level}
+        decision={analysis.decision}
+        enabledPolicyCount={enabledPolicyCount}
+        totalEvents={events.length}
+      />
+
 
         <StatsGrid
           totalEvents={events.length}
@@ -405,6 +417,8 @@ export default function Home() {
         </section>
 
         <SecurityLogs events={events} />
+
+          <SystemArchitecture />
 
         <DemoScript />
       </div>
