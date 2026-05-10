@@ -25,30 +25,26 @@ export function ExecutiveSummary({
 }: ExecutiveSummaryProps) {
   return (
     <section className="mb-6 rounded-[2rem] border border-lime-300/15 bg-black/45 p-5 backdrop-blur-xl">
-      <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="mb-2 text-xs uppercase tracking-[0.22em] text-lime-300/80">
-            Executive Summary
-          </p>
+      <div className="mb-5">
+        <p className="mb-2 text-xs uppercase tracking-[0.22em] text-lime-300/80">
+          Executive Summary
+        </p>
 
-          <h2 className="text-2xl font-semibold text-white md:text-3xl">
-            TrustLayer turns unsafe AI agents into governed enterprise workflows.
-          </h2>
+        <h2 className="text-2xl font-semibold text-white md:text-3xl">
+          TrustLayer turns unsafe AI agents into governed enterprise workflows.
+        </h2>
 
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-white/55">
-            AI agents are moving from chat to action: reading documents, sending
-            emails, calling APIs, and touching business systems. TrustLayer adds
-            a security control layer before those actions happen.
-          </p>
-        </div>
+        <p className="mt-3 max-w-4xl text-sm leading-6 text-white/55">
+          AI agents are moving from chat to action: reading documents, sending
+          emails, calling APIs, and touching business systems. TrustLayer adds a
+          security control layer before those actions happen.
+        </p>
+      </div>
 
-        <div className="rounded-3xl border border-lime-300/20 bg-lime-300/10 px-5 py-4 text-right">
-          <p className="text-xs uppercase tracking-[0.2em] text-lime-200">
-            Current decision
-          </p>
-          <p className="mt-1 text-2xl font-semibold text-white">{decision}</p>
-          <p className="mt-1 text-xs text-white/45">{riskLevel} risk</p>
-        </div>
+      <div className="mb-4 grid gap-4 md:grid-cols-3">
+        <Metric label="Current decision" value={decision} helper={`${riskLevel} risk`} />
+        <Metric label="Policies enabled" value={`${enabledPolicyCount}/6`} helper="Active controls" />
+        <Metric label="Session events" value={String(totalEvents)} helper="Logged actions" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -90,12 +86,6 @@ export function ExecutiveSummary({
           text="Enterprise SaaS priced by workspace, protected agent, policy controls, and monitored tool calls."
         />
       </div>
-
-      <div className="mt-4 grid gap-4 md:grid-cols-3">
-        <Metric label="Policies enabled" value={`${enabledPolicyCount}/6`} />
-        <Metric label="Session events" value={String(totalEvents)} />
-        <Metric label="Category" value="Cybersecurity + AI" />
-      </div>
     </section>
   );
 }
@@ -122,14 +112,24 @@ function SummaryCard({
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({
+  label,
+  value,
+  helper,
+}: {
+  label: string;
+  value: string;
+  helper: string;
+}) {
   return (
     <div className="rounded-3xl border border-lime-300/15 bg-lime-300/10 p-4">
       <p className="text-xs uppercase tracking-[0.18em] text-lime-200">
         {label}
       </p>
 
-      <p className="mt-2 text-xl font-semibold text-white">{value}</p>
+      <p className="mt-2 text-2xl font-semibold text-white">{value}</p>
+
+      <p className="mt-1 text-xs text-white/45">{helper}</p>
     </div>
   );
 }
