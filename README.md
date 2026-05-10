@@ -2,6 +2,10 @@
 
 **TrustLayer AI** is an AI agent security firewall that detects prompt injection, sensitive data leakage, suspicious destinations, and unsafe tool calls before an autonomous AI agent executes an action.
 
+## Live Demo
+
+https://opspulse-ai-g1rw.vercel.app
+
 The project demonstrates how companies can safely deploy AI agents that read documents, send emails, call APIs, and interact with business systems.
 
 ---
