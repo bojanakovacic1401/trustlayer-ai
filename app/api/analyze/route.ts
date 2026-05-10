@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server";
+import {
+  applySemanticReview,
+  planAgentToolCallWithAI,
+  reviewSecuritySemantics,
+} from "@/lib/aiSecurity";
 import { defaultPolicyConfig } from "@/lib/policies";
 import { analyzeContent, createToolCall } from "@/lib/securityEngine";
 import type { SecurityPolicyConfig } from "@/lib/types";
+
+export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
@@ -28,8 +35,28 @@ export async function POST(request: Request) {
       );
     }
 
-    const analysis = analyzeContent(prompt, document, policyConfig);
-    const toolCall = createToolCall(prompt, document, analysis);
+    const baseAnalysis = analyzeContent(prompt, document, policyConfig);
+
+    const semanticReview = await reviewSecuritySemantics({
+      prompt,
+      document,
+      analysis: baseAnalysis,
+    });
+
+    const analysis = applySemanticReview(
+      baseAnalysis,
+      semanticReview,
+      policyConfig
+    );
+
+    const aiPlannedToolCall = await planAgentToolCallWithAI({
+      prompt,
+      document,
+      analysis,
+    });
+
+    const toolCall =
+      aiPlannedToolCall || createToolCall(prompt, document, analysis);
 
     return NextResponse.json({
       ok: true,
@@ -37,6 +64,7 @@ export async function POST(request: Request) {
       scenarioId,
       analysis,
       toolCall,
+      semanticReview,
       policyConfig,
       timestamp: new Date().toISOString(),
       durationMs: Date.now() - startedAt,

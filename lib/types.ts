@@ -75,3 +75,17 @@ export type SecurityEvent = {
     | "Manual Override";
   source: string;
 };
+
+export type SemanticSecurityReview = {
+  enabled: boolean;
+  model: string;
+  confidence: "Low" | "Medium" | "High";
+  severity: RiskLevel;
+  promptInjectionLikely: boolean;
+  dataLeakLikely: boolean;
+  suspiciousDestinationLikely: boolean;
+  unsafeToolLikely: boolean;
+  summary: string;
+  matchedSignals: string[];
+  recommendedAction: string;
+};

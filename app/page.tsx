@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CheckCircle2, FileText, ShieldCheck } from "lucide-react";
 
 import { ActionApprovalPanel } from "@/components/ActionApprovalPanel";
@@ -15,6 +15,7 @@ import { PolicyBuilder } from "@/components/PolicyBuilder";
 import { RiskCard } from "@/components/RiskCard";
 import { ScenarioSelector } from "@/components/ScenarioSelector";
 import { SecurityLogs } from "@/components/SecurityLogs";
+import { SemanticReviewCard } from "@/components/SemanticReviewCard";
 import { StatsGrid } from "@/components/StatsGrid";
 import { TopNav } from "@/components/TopNav";
 
@@ -26,6 +27,7 @@ import type {
   SecurityAnalysis,
   SecurityEvent,
   SecurityPolicyConfig,
+  SemanticSecurityReview,
   ToolCall,
 } from "@/lib/types";
 
@@ -36,6 +38,7 @@ type AnalyzeApiResponse =
       scenarioId: string;
       analysis: SecurityAnalysis;
       toolCall: ToolCall;
+      semanticReview: SemanticSecurityReview;
       policyConfig: SecurityPolicyConfig;
       timestamp: string;
       durationMs: number;
@@ -57,6 +60,21 @@ const initialToolCall = createToolCall(
   initialAnalysis
 );
 
+const initialSemanticReview: SemanticSecurityReview = {
+  enabled: false,
+  model: "not-run-yet",
+  confidence: "Medium",
+  severity: "Low",
+  promptInjectionLikely: false,
+  dataLeakLikely: false,
+  suspiciousDestinationLikely: false,
+  unsafeToolLikely: false,
+  summary:
+    "Run analysis to enable semantic AI review. Deterministic policy checks are already active.",
+  matchedSignals: [],
+  recommendedAction: "Run the security scan to generate AI-assisted review.",
+};
+
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -70,6 +88,8 @@ export default function Home() {
 
   const [analysis, setAnalysis] = useState<SecurityAnalysis>(initialAnalysis);
   const [toolCall, setToolCall] = useState<ToolCall>(initialToolCall);
+  const [semanticReview, setSemanticReview] =
+    useState<SemanticSecurityReview>(initialSemanticReview);
 
   const [hasRun, setHasRun] = useState(false);
   const [events, setEvents] = useState<SecurityEvent[]>([]);
@@ -83,6 +103,22 @@ export default function Home() {
   const [lastAnalyzedAt, setLastAnalyzedAt] = useState<string | null>(null);
   const [operatorDecision, setOperatorDecision] =
     useState<OperatorDecision | null>(null);
+
+  useEffect(() => {
+    const savedEvents = window.localStorage.getItem("trustlayer-events");
+
+    if (!savedEvents) return;
+
+    try {
+      setEvents(JSON.parse(savedEvents).slice(0, 12));
+    } catch {
+      window.localStorage.removeItem("trustlayer-events");
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("trustlayer-events", JSON.stringify(events));
+  }, [events]);
 
   const activeScenario =
     demoScenarios.find((scenario) => scenario.id === activeScenarioId) ||
@@ -151,16 +187,19 @@ export default function Home() {
       setOperatorDecision(null);
       setApiStatus("idle");
 
-      setScanStep("Step 1/4 — Inspecting prompt and document...");
+      setScanStep("Step 1/5 — Inspecting prompt and document...");
       await wait(300);
 
-      setScanStep("Step 2/4 — Checking prompt injection patterns...");
+      setScanStep("Step 2/5 — Checking deterministic security rules...");
       await wait(300);
 
-      setScanStep("Step 3/4 — Applying active security policies...");
+      setScanStep("Step 3/5 — Applying active security policies...");
       await wait(300);
 
-      setScanStep("Step 4/4 — Calling /api/analyze security endpoint...");
+      setScanStep("Step 4/5 — Running semantic AI security review...");
+      await wait(300);
+
+      setScanStep("Step 5/5 — Calling /api/analyze security endpoint...");
 
       const response = await fetch("/api/analyze", {
         method: "POST",
@@ -183,6 +222,7 @@ export default function Home() {
 
       setAnalysis(data.analysis);
       setToolCall(data.toolCall);
+      setSemanticReview(data.semanticReview);
       setLastAnalyzedAt(data.timestamp);
       setApiStatus("connected");
       setScanStep(
@@ -196,6 +236,7 @@ export default function Home() {
     } catch {
       setApiStatus("error");
       setScanStep("API error — analysis could not be completed.");
+      setSemanticReview(initialSemanticReview);
     } finally {
       setIsAnalyzing(false);
     }
@@ -223,6 +264,7 @@ export default function Home() {
     setDocumentText(scenario.document);
     setAnalysis(nextAnalysis);
     setToolCall(nextToolCall);
+    setSemanticReview(initialSemanticReview);
     setHasRun(false);
     setIsDirty(false);
     setApiStatus("idle");
@@ -238,6 +280,7 @@ export default function Home() {
     setPrompt(value);
     setAnalysis(nextAnalysis);
     setToolCall(nextToolCall);
+    setSemanticReview(initialSemanticReview);
     setIsDirty(true);
     setOperatorDecision(null);
   }
@@ -249,6 +292,7 @@ export default function Home() {
     setDocumentText(value);
     setAnalysis(nextAnalysis);
     setToolCall(nextToolCall);
+    setSemanticReview(initialSemanticReview);
     setIsDirty(true);
     setOperatorDecision(null);
   }
@@ -260,6 +304,7 @@ export default function Home() {
     setPolicyConfig(nextPolicyConfig);
     setAnalysis(nextAnalysis);
     setToolCall(nextToolCall);
+    setSemanticReview(initialSemanticReview);
     setIsDirty(true);
     setOperatorDecision(null);
     setScanStep("Policy changed. Analyze again to confirm through API.");
@@ -394,7 +439,10 @@ export default function Home() {
                 onAnalyze={runSimulation}
               />
 
-              <RiskCard analysis={analysis} toolCall={toolCall} />
+              <div className="space-y-6">
+                <RiskCard analysis={analysis} toolCall={toolCall} />
+                <SemanticReviewCard review={semanticReview} />
+              </div>
             </div>
           </section>
 
