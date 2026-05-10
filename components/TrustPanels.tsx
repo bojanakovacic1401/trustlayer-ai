@@ -33,7 +33,7 @@ export function AttackTimeline({ analysis }: { analysis: SecurityAnalysis }) {
         {analysis.timeline.map((step, index) => (
           <div
             key={step.title}
-            className="flex gap-3 rounded-3xl border border-white/10 bg-white/[0.03] p-4"
+            className="flex gap-3 rounded-3xl border border-white/10 bg-white/[0.03] p-3"
           >
             <div
               className={`mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${timelineClasses(
@@ -45,7 +45,7 @@ export function AttackTimeline({ analysis }: { analysis: SecurityAnalysis }) {
 
             <div>
               <p className="font-semibold text-white">{step.title}</p>
-              <p className="mt-1 text-sm leading-6 text-white/50">
+              <p className="mt-1 text-sm leading-5 text-white/50">
                 {step.description}
               </p>
             </div>

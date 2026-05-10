@@ -1,18 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { CheckCircle2, FileText, ShieldCheck } from "lucide-react";
 
 import { ActionApprovalPanel } from "@/components/ActionApprovalPanel";
 import { AgentWorkspace } from "@/components/AgentWorkspace";
 import { ApiStatusBar } from "@/components/ApiStatusBar";
 import { ExecutiveSummary } from "@/components/ExecutiveSummary";
 import { SystemArchitecture } from "@/components/SystemArchitecture";
-import {
-  AttackTimeline,
-  PolicyChecks,
-  SafeAgentResponse,
-} from "@/components/TrustPanels";
-import { DemoScript } from "@/components/DemoScript";
+import { AttackTimeline, PolicyChecks } from "@/components/TrustPanels";
 import { ExportReportButton } from "@/components/ExportReportButton";
 import { Hero } from "@/components/Hero";
 import { PolicyBuilder } from "@/components/PolicyBuilder";
@@ -71,14 +67,17 @@ export default function Home() {
   const [prompt, setPrompt] = useState(defaultScenario.prompt);
   const [policyConfig, setPolicyConfig] =
     useState<SecurityPolicyConfig>(defaultPolicyConfig);
+
   const [analysis, setAnalysis] = useState<SecurityAnalysis>(initialAnalysis);
   const [toolCall, setToolCall] = useState<ToolCall>(initialToolCall);
+
   const [hasRun, setHasRun] = useState(false);
   const [events, setEvents] = useState<SecurityEvent[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [apiStatus, setApiStatus] = useState<"idle" | "connected" | "error">(
     "idle"
   );
+
   const [scanStep, setScanStep] = useState("Ready to analyze agent activity.");
   const [isDirty, setIsDirty] = useState(false);
   const [lastAnalyzedAt, setLastAnalyzedAt] = useState<string | null>(null);
@@ -153,13 +152,13 @@ export default function Home() {
       setApiStatus("idle");
 
       setScanStep("Step 1/4 — Inspecting prompt and document...");
-      await wait(350);
+      await wait(300);
 
       setScanStep("Step 2/4 — Checking prompt injection patterns...");
-      await wait(350);
+      await wait(300);
 
       setScanStep("Step 3/4 — Applying active security policies...");
-      await wait(350);
+      await wait(300);
 
       setScanStep("Step 4/4 — Calling /api/analyze security endpoint...");
 
@@ -212,6 +211,7 @@ export default function Home() {
       scenario.document,
       policyConfig
     );
+
     const nextToolCall = createToolCall(
       scenario.prompt,
       scenario.document,
@@ -284,14 +284,17 @@ export default function Home() {
     setEvents((prev) => [event, ...prev].slice(0, 12));
   }
 
-  const blockedCount = events.filter((event) => event.action === "Blocked").length;
+  const blockedCount = events.filter(
+    (event) => event.action === "Blocked"
+  ).length;
 
   const highRiskCount = events.filter((event) =>
     ["High", "Critical"].includes(event.risk)
   ).length;
 
   const loggedCount = events.filter((event) => event.action === "Logged").length;
-const enabledPolicyCount = Object.values(policyConfig).filter(Boolean).length;
+
+  const enabledPolicyCount = Object.values(policyConfig).filter(Boolean).length;
 
   const safeResponse =
     operatorDecision === "Approved"
@@ -317,7 +320,7 @@ const enabledPolicyCount = Object.values(policyConfig).filter(Boolean).length;
       <div className="absolute left-1/2 top-[-180px] h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-lime-400/20 blur-[120px]" />
       <div className="absolute bottom-[-180px] right-[-120px] h-[420px] w-[420px] rounded-full bg-green-500/10 blur-[120px]" />
 
-      <div className="relative z-10 mx-auto max-w-7xl px-5 py-6">
+      <div className="relative z-10 mx-auto w-full max-w-[1480px] px-5 py-6 lg:px-6">
         <TopNav onRun={runSimulation} isAnalyzing={isAnalyzing} />
 
         <Hero
@@ -347,14 +350,13 @@ const enabledPolicyCount = Object.values(policyConfig).filter(Boolean).length;
           onReset={resetPolicyConfig}
         />
 
-      <ExecutiveSummary
-        activeScenarioName={activeScenario.name}
-        riskLevel={analysis.level}
-        decision={analysis.decision}
-        enabledPolicyCount={enabledPolicyCount}
-        totalEvents={events.length}
-      />
-
+        <ExecutiveSummary
+          activeScenarioName={activeScenario.name}
+          riskLevel={analysis.level}
+          decision={analysis.decision}
+          enabledPolicyCount={enabledPolicyCount}
+          totalEvents={events.length}
+        />
 
         <StatsGrid
           totalEvents={events.length}
@@ -363,64 +365,240 @@ const enabledPolicyCount = Object.values(policyConfig).filter(Boolean).length;
           loggedCount={loggedCount}
         />
 
-        <section className="grid gap-6 lg:grid-cols-[1.08fr_0.92fr]">
-          <AgentWorkspace
-            activeScenarioName={activeScenario.name}
-            prompt={prompt}
-            documentText={documentText}
-            isAnalyzing={isAnalyzing}
-            onPromptChange={updatePrompt}
-            onDocumentChange={updateDocument}
-            onAnalyze={runSimulation}
-          />
+        <section className="space-y-6">
+          <section className="rounded-[2rem] border border-lime-300/15 bg-black/45 p-5 backdrop-blur-xl">
+            <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-lime-300/80">
+                  Live Agent Inspection
+                </p>
 
-          <div className="space-y-6">
-            <RiskCard analysis={analysis} toolCall={toolCall} />
+                <h2 className="mt-1 text-2xl font-semibold text-white">
+                  Input analysis and risk decision
+                </h2>
+              </div>
 
-            <ActionApprovalPanel
-              analysis={analysis}
-              toolCall={toolCall}
-              operatorDecision={operatorDecision}
-              onDecision={handleOperatorDecision}
-            />
+              <span className="rounded-full border border-lime-300/20 bg-lime-300/10 px-4 py-1 text-xs font-semibold text-lime-200">
+                {analysis.level} risk
+              </span>
+            </div>
 
-            <SafeAgentResponse hasRun={hasRun} response={safeResponse} />
+            <div className="grid gap-6 xl:grid-cols-2">
+              <AgentWorkspace
+                activeScenarioName={activeScenario.name}
+                prompt={prompt}
+                documentText={documentText}
+                isAnalyzing={isAnalyzing}
+                onPromptChange={updatePrompt}
+                onDocumentChange={updateDocument}
+                onAnalyze={runSimulation}
+              />
 
-            <div className="rounded-[2rem] border border-lime-300/15 bg-black/45 p-5 backdrop-blur-xl">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-white">
-                    Security Report
-                  </h3>
-                  <p className="mt-1 text-sm text-white/45">
-                    Export current scan results for audit or demo review.
-                  </p>
+              <RiskCard analysis={analysis} toolCall={toolCall} />
+            </div>
+          </section>
+
+          <section className="rounded-[2rem] border border-lime-300/15 bg-black/45 p-5 backdrop-blur-xl">
+            <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-lime-300/80">
+                  Threat Handling
+                </p>
+
+                <h2 className="mt-1 text-2xl font-semibold text-white">
+                  Attack path and operator control
+                </h2>
+              </div>
+
+              <span className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-1 text-xs text-white/50">
+                Action guard active
+              </span>
+            </div>
+
+            <div className="grid gap-6 xl:grid-cols-2">
+              <AttackTimeline analysis={analysis} />
+
+              <ActionApprovalPanel
+                analysis={analysis}
+                toolCall={toolCall}
+                operatorDecision={operatorDecision}
+                onDecision={handleOperatorDecision}
+              />
+            </div>
+          </section>
+
+          <section className="rounded-[2rem] border border-lime-300/15 bg-black/45 p-5 backdrop-blur-xl">
+            <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-lime-300/80">
+                  Enforcement Center
+                </p>
+
+                <h2 className="mt-1 text-2xl font-semibold text-white">
+                  Policy result, safe response, and audit export
+                </h2>
+              </div>
+
+              <span className="rounded-full border border-lime-300/20 bg-lime-300/10 px-4 py-1 text-xs font-semibold text-lime-200">
+                {enabledPolicyCount}/6 policies enabled
+              </span>
+            </div>
+
+            <div className="grid gap-6 xl:grid-cols-2">
+              <PolicyChecks analysis={analysis} />
+
+              <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
+                <div className="flex h-full flex-col gap-5">
+                  <div>
+                    <h3 className="flex items-center gap-2 text-xl font-semibold text-white">
+                      <ShieldCheck className="h-5 w-5 text-lime-300" />
+                      Response & Report Center
+                    </h3>
+
+                    <p className="mt-1 text-sm text-white/45">
+                      Protected response, execution status, report export, and
+                      final enforcement state.
+                    </p>
+                  </div>
+
+                  <div className="rounded-3xl border border-white/10 bg-black/35 p-5">
+                    <p className="mb-3 text-xs uppercase tracking-[0.2em] text-lime-200">
+                      Safe agent response
+                    </p>
+
+                    <p className="text-sm leading-6 text-white/65">
+                      {hasRun
+                        ? safeResponse
+                        : "Run the simulation to generate the protected agent response."}
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="rounded-3xl border border-white/10 bg-black/35 p-5">
+                      <p className="mb-3 text-xs uppercase tracking-[0.2em] text-white/40">
+                        Execution status
+                      </p>
+
+                      <p
+                        className={`text-base font-semibold ${
+                          analysis.decision === "Blocked"
+                            ? "text-red-200"
+                            : analysis.decision === "Needs Approval"
+                              ? "text-yellow-200"
+                              : "text-lime-200"
+                        }`}
+                      >
+                        {operatorDecision
+                          ? `Operator set: ${operatorDecision}`
+                          : `System decision: ${analysis.decision}`}
+                      </p>
+
+                      <p className="mt-3 text-xs leading-5 text-white/45">
+                        Current tool: {toolCall.tool} → {toolCall.destination}
+                      </p>
+                    </div>
+
+                    <div className="rounded-3xl border border-white/10 bg-black/35 p-5">
+                      <p className="mb-3 text-xs uppercase tracking-[0.2em] text-white/40">
+                        Last analyzed
+                      </p>
+
+                      <p className="text-base font-semibold text-white">
+                        {lastAnalyzedAt
+                          ? new Date(lastAnalyzedAt).toLocaleString()
+                          : "Not analyzed yet"}
+                      </p>
+
+                      <p className="mt-3 text-xs leading-5 text-white/45">
+                        API status: {apiStatus}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="rounded-3xl border border-white/10 bg-black/35 p-5">
+                      <p className="mb-3 text-xs uppercase tracking-[0.2em] text-white/40">
+                        Enforcement mode
+                      </p>
+
+                      <p className="text-base font-semibold text-lime-200">
+                        {analysis.decision === "Blocked"
+                          ? "Prevent execution"
+                          : analysis.decision === "Needs Approval"
+                            ? "Require review"
+                            : "Allow safely"}
+                      </p>
+
+                      <p className="mt-3 text-xs leading-5 text-white/45">
+                        Based on active policy configuration and detected threat
+                        signals.
+                      </p>
+                    </div>
+
+                    <div className="rounded-3xl border border-white/10 bg-black/35 p-5">
+                      <p className="mb-3 text-xs uppercase tracking-[0.2em] text-white/40">
+                        Audit status
+                      </p>
+
+                      <p className="text-base font-semibold text-lime-200">
+                        {policyConfig.auditAllActions
+                          ? "Audit enabled"
+                          : "Audit optional"}
+                      </p>
+
+                      <p className="mt-3 text-xs leading-5 text-white/45">
+                        Session contains {events.length} logged security events.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-3xl border border-white/10 bg-black/35 p-5">
+                    <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-white">
+                      <CheckCircle2 className="h-4 w-4 text-lime-300" />
+                      Current protection state
+                    </p>
+
+                    <p className="text-sm leading-6 text-white/60">
+                      TrustLayer is evaluating prompt integrity, data leakage,
+                      destination safety, tool permissions, and operator approval
+                      before the agent executes any business action.
+                    </p>
+                  </div>
+
+                  <div className="rounded-3xl border border-lime-300/20 bg-lime-300/10 p-5">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <p className="flex items-center gap-2 font-semibold text-white">
+                          <FileText className="h-4 w-4 text-lime-300" />
+                          Security Report
+                        </p>
+
+                        <p className="mt-1 text-sm text-white/55">
+                          Export the current scan for audit, compliance, or
+                          review.
+                        </p>
+                      </div>
+
+                      <ExportReportButton
+                        scenarioName={activeScenario.name}
+                        prompt={prompt}
+                        documentText={documentText}
+                        analysis={analysis}
+                        toolCall={toolCall}
+                        events={events}
+                        lastAnalyzedAt={lastAnalyzedAt}
+                      />
+                    </div>
+                  </div>
                 </div>
-
-                <ExportReportButton
-                  scenarioName={activeScenario.name}
-                  prompt={prompt}
-                  documentText={documentText}
-                  analysis={analysis}
-                  toolCall={toolCall}
-                  events={events}
-                  lastAnalyzedAt={lastAnalyzedAt}
-                />
               </div>
             </div>
-          </div>
-        </section>
-
-        <section className="mt-6 grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-          <AttackTimeline analysis={analysis} />
-          <PolicyChecks analysis={analysis} />
+          </section>
         </section>
 
         <SecurityLogs events={events} />
 
-          <SystemArchitecture />
-
-        <DemoScript />
+        <SystemArchitecture />
       </div>
     </main>
   );
